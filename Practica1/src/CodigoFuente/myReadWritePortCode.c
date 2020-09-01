@@ -31,26 +31,39 @@ void StopTheBeep() {
     gfpOut32(0x61, (gfpInp32(0x61) & 0xFC));  // Desactivar la salida de la bocina (compuerta AND)
 }
 
-void SendToPortLEDS(short port, WORD dato) {
+void ByteToDisplayHex(const WORD byte, WORD* lower_nibble, WORD* high_nibble) {
+    // Convert the value of the byte to its representation in the seven segment display.
+}
+
+void SendToPortDisplay(short port, WORD dato, WORD deactivate_bit) {
+    const WORD deactivate_mask = 0xFF ^ deactivate_bit;
     const WORD mask_control = 0x0B;
 
     WORD control_data = gfpInp32(port + 2) ^ mask_control;
 
-    gfpOut32(port + 2, (control_data & 0xFE) ^ mask_control);
+    gfpOut32(port + 2, (control_data & deactivate_mask) ^ mask_control);
     Sleep(100);
 
     gfpOut32(port, dato);
     Sleep(100);
 
-    gfpOut32(port + 2, (control_data | 0x01) ^ mask_control);
+    gfpOut32(port + 2, (control_data | deactivate_bit) ^ mask_control);
     Sleep(100);
 }
 
-WORD ReadPortInput(short port) {
+void WriteByteToHexInDisplay(short port, WORD dato) {
+    WORD dato_low, dato_high;
+    ByteToDisplayHex(dato, &dato_low, &dato_high);
+    SendToPortDisplay(port, dato_low, 0x01);
+    SendToPortDisplay(port, dato_high, 0x02);
+}
+
+WORD ReadPortInput(short port, WORD deactivate_bit) {
+    const WORD deactivate_mask = 0xFF ^ deactivate_bit;
     const WORD mask_control = 0x0B;
     const WORD status_control = 0x80;
-    unsigned char mask_status[] = {S_nERROR, S_SELECT_IN, S_PAPER_END, S_BUSY,
-                                   S_nERROR, S_SELECT_IN, S_PAPER_END, S_BUSY};
+    unsigned char mask_status[] = {S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR,
+                                   S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR};
     unsigned char status;
     unsigned char dato = 0;
     unsigned int i;
@@ -60,12 +73,12 @@ WORD ReadPortInput(short port) {
     for (i = 0; i < 8; i++, aux <<= 1) {
         if (i == 0) {
             control = gfpInp32(port + 2) ^ mask_control;
-            control = control & 0xF7;
+            control = control & deactivate_mask;
             gfpOut32(port + 2, control ^ mask_control);
             Sleep(100);
         } else if (i == 4) {
             control = gfpInp32(port + 2) ^ mask_control;
-            control = control | 0x08;
+            control = control | deactivate_bit;
             gfpOut32(port + 2, control ^ mask_control);
             Sleep(100);
         }
@@ -76,6 +89,24 @@ WORD ReadPortInput(short port) {
     }
 
     return (dato);  // b7b6b5b4b3b2b1b0
+}
+
+WORD Read16bitsPort(short port) {
+    const WORD mask_control = 0x0B;
+
+    WORD control_data = gfpInp32(port + 2) ^ mask_control;
+
+    gfpOut32(port + 2, (control_data & 0xFB) ^ mask_control);
+    Sleep(100);
+
+    WORD upper_byte = ReadPortInput(port, 0x08);
+
+    gfpOut32(port + 2, (control_data | 0x04) ^ mask_control);
+    Sleep(100);
+
+    WORD low_byte = ReadPortInput(port, 0x08);
+
+    return (upper_byte << 8) + low_byte;
 }
 
 int main(int argc, char *argv[]) {
