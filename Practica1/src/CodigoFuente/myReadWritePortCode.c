@@ -49,8 +49,8 @@ void SendToPortLEDS(short port, WORD dato) {
 WORD ReadPortInput(short port) {
     const WORD mask_control = 0x0B;
     const WORD status_control = 0x80;
-    unsigned char mask_status[] = {S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR,
-                                   S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR};
+    unsigned char mask_status[] = {S_nERROR, S_SELECT_IN, S_PAPER_END, S_BUSY,
+                                   S_nERROR, S_SELECT_IN, S_PAPER_END, S_BUSY};
     unsigned char status;
     unsigned char dato = 0;
     unsigned int i;
