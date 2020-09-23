@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <string.h>
+
 #include "stdio.h"
 #include "windows.h"
 
@@ -26,6 +27,125 @@ lpOut32 gfpOut32;
 lpInp32 gfpInp32;
 lpIsInpOutDriverOpen gfpIsInpOutDriverOpen;
 lpIsXP64Bit gfpIsXP64Bit;
+
+void send(unsigned int p_base, unsigned short dato) {
+    unsigned char aux;
+    unsigned char control;
+    unsigned char MASK_CTL = 0x0B;
+
+    // Mascara de cada bit de Control:
+    const unsigned char MASK_ON_C0 = 0x01;
+    const unsigned char MASK_ON_C1 = 0x02;
+    const unsigned char MASK_ON_C2 = 0x04;
+    const unsigned char MASK_ON_C3 = 0x08;
+    const unsigned char MASK_OFF_C0 = (0xFF ^ MASK_ON_C0);
+    const unsigned char MASK_OFF_C1 = (0xFF ^ MASK_ON_C1);
+    const unsigned char MASK_OFF_C2 = (0xFF ^ MASK_ON_C2);
+    const unsigned char MASK_OFF_C3 = (0xFF ^ MASK_ON_C3);
+
+    // Obtener el valor de cada uno de los nibbles.
+    short low_byte_low_nibble = dato & 0x0F;
+    short low_byte_high_nibble = (dato >> 4) & 0x0F;
+    short high_byte_low_nibble = (dato >> 8) & 0x0F;
+    short high_byte_high_nibble = (dato >> 12) & 0x0F;
+
+    // Transformar el valor del nibble a su correspondiente para el display.
+    low_byte_low_nibble = Digitos[low_byte_low_nibble];
+    low_byte_high_nibble = Digitos[low_byte_high_nibble];
+    high_byte_low_nibble = Digitos[high_byte_low_nibble];
+    high_byte_high_nibble = Digitos[high_byte_high_nibble];
+
+    // Escribir el high_byte_high_nibble.
+    aux = inp(p_base + 2) ^ MASK_CTL;
+    control = aux & MASK_OFF_C0;
+    outp(p_base + 2, control ^ MASK_CTL);
+    Sleep(100);
+    outp(p_base, high_byte_high_nibble);
+    Sleep(100);
+    control = aux | MASK_ON_C0;
+    outp(p_base + 2, control ^ MASK_CTL);
+
+    // Escribir el high_byte_low_nibble.
+    aux = inp(p_base + 2) ^ MASK_CTL;
+    control = aux & MASK_OFF_C1;
+    outp(p_base + 2, control ^ MASK_CTL);
+    Sleep(100);
+    outp(p_base, high_byte_low_nibble);
+    Sleep(100);
+    control = aux | MASK_ON_C1;
+    outp(p_base + 2, control ^ MASK_CTL);
+
+    // Escribir el low_byte_high_nibble.
+    aux = inp(p_base + 2) ^ MASK_CTL;
+    control = aux & MASK_OFF_C2;
+    outp(p_base + 2, control ^ MASK_CTL);
+    Sleep(100);
+    outp(p_base, low_byte_high_nibble);
+    Sleep(100);
+    control = aux | MASK_ON_C2;
+    outp(p_base + 2, control ^ MASK_CTL);
+
+    // Escribir el low_byte_low_nibble.
+    aux = inp(p_base + 2) ^ MASK_CTL;
+    control = aux & MASK_OFF_C3;
+    outp(p_base + 2, control ^ MASK_CTL);
+    Sleep(100);
+    outp(p_base, low_byte_low_nibble);
+    Sleep(100);
+    control = aux | MASK_ON_C3;
+    outp(p_base + 2, control ^ MASK_CTL);
+}
+
+#define S_BUSY 0x80
+#define S_ACK 0x40
+#define S_PAPER_END 0x20
+#define S_SELECT_IN 0x10
+#define S_nERROR 0x08
+
+unsigned char get(unsigned int p_base) {
+    unsigned char mask_status[] = {S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR,
+                                   S_BUSY, S_PAPER_END, S_SELECT_IN, S_nERROR};
+    unsigned char status;
+    unsigned char MASK_CTL = 0x0B;
+    unsigned char MASK_STS = 0x80;
+    unsigned char dato = 0;
+    unsigned int i;
+    unsigned int aux = 0x01;
+    unsigned int control;
+
+    const unsigned char MASK_NACK = 0x80;
+
+    bool waiting = true;
+    while(waiting) {
+        status = inp(p_base + 1) ^ MASK_STS;
+        // Si el nAck está siempre en high, nosotros lo veriamos en low
+        // sin la mascara por su negado de hardware, pero gracias a la mascara
+        // en realidad lo vemos en high.
+        // Por lo tanto, cuando se presione el boton, lo sabremos porque el valor
+        // va a estar en low.
+        if((status & MASK_NACK) == 0) {
+            waiting = false;
+        }
+        // Igual no vendría mal poner un pequeño sleep, de 1 o 10ms.
+    }
+
+    for (i = 0; i < 8; i++, aux <<= 1) {
+        if (i == 0) {
+            control = inp(p_base + 2) ^ MASK_CTL;
+            control = control & 0xF7;
+            outp(p_base + 2, control ^ MASK_CTL);
+            Sleep(100);
+        } else if (i == 4) {
+            control = inp(p_base + 2) ^ MASK_CTL;
+            control = control | 0x08;
+            outp(p_base + 2, control ^ MASK_CTL);
+            Sleep(100);
+        }
+        status = inp(p_base + 1) ^ MASK_STS;
+        if ((status & mask_status[i]) != 0) dato = dato | aux;
+    }
+    return (dato);  // b7b6b5b4b3b2b1b0
+}
 
 void WriteInDisplays(short puerto_base, short data, bool is_high) {
     // Variables auxiliares.
