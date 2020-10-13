@@ -1,3 +1,4 @@
+/*
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
@@ -61,4 +62,30 @@ int main(int argc, char *argv[]) {
         }
     }
     return 0;
+}
+
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
+HANDLE *device;
+unsigned char dato;
+DWORD aux;
+void main() {
+    device = CreateFile("\\\\.\\NombreDeviceDriver", GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                        OPEN_EXISTING, 0, NULL);
+    if (device != INVALID_HANDLE_VALUE) {
+        ReadFile(device, &dato, 1, &aux, NULL);
+        if(dato == 0) {
+            printf("TODAS las compuertas NAND funcionan CORRECTAMENTE\n");
+        } else {
+            printf("Las siguientes compuertas no funcionan:\n");
+            for(int i = 0; i < 4; ++i) {
+                if(dato & (1 << i)) {
+                    printf("NAND%d\n", i);
+                }
+            }
+        }
+        CloseHandle(device);
+    }
 }

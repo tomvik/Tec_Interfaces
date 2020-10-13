@@ -61,6 +61,76 @@ NTSTATUS DispatchClose(PDEVICE_OBJECT fdo, PIRP Irp)
 
 #pragma PAGEDCODE
 
+NTSTATUS DispatchReadNAND(PDEVICE_OBJECT fdo, PIRP Irp) {
+   PDEVICE_EXTENSION pdx = (PDEVICE_EXTENSION) fdo->DeviceExtension;
+   PUCHAR pDato = (PUCHAR) Irp->AssociatedIrp.SystemBuffer;
+   /// Lógica:
+   // Para probar el funcionamiento de cada NAND, hay que recordar primeramente
+   // la tabla del NAND. Y, verificar que cada uno esté dando el resultado esperado.
+   // Tabla:
+   // A B Y
+   // 0 0 1
+   // 0 1 1
+   // 1 0 1
+   // 1 1 0
+   // La lógica será ir por cada una de estas entradas y compararlas con la salida recibida.
+   // Si alguna de las salidas no corresponde a lo esperado, se asumirá que ese NAND no funciona.
+   // Y por lo tanto el bit correspondiente se prendera.
+
+   // Conexiones:
+   // D0 nand D1 = S3
+   // D2 nand D3 = S4
+   // D3 nand D5 = S5
+   // D6 nand D7 = S7
+										   // 76 54 32 10
+   unsigned char datos_entrada[4] = {0x00, // 00 00 00 00
+   									 0x55, // 01 01 01 01
+   									 0xCC, // 10 10 10 10
+   									 0xFF  // 11 11 11 11
+									};
+										  // 76 54 32 10
+   unsigned char datos_salida[4] = {0xD8, // 10 11 10 00
+   									0xD8, // 10 11 10 00
+   									0xD8, // 10 11 10 00
+   									0x00, // 00 00 00 00
+									};
+
+	const unsigned char status_number[4] = {3, 4, 5, 7};
+	const unsigned char shift_status_amount[4] = {3, 3, 3, 4};
+	
+	const unsigned char kPuertoBase = 0x378;
+	const unsigned char kStatusMask = 0x80;
+	const unsigned char kImportantBits = 0xD8;
+	unsigned char final_status = 0;
+
+	for(int i = 0; i < 4; ++i) {
+		WRITE_PORT_UCHAR((unsigned char *)(kPuertoBase), datos_entrada[i]);
+
+		unsigned char dato;
+   		dato = READ_PORT_UCHAR((unsigned char *)(kPuertoBase + 1)) ^ kStatusMask;
+
+		// Turn off the bits we don't care about.
+		dato &= kImportantBits;
+		// If there's a difference between the bits, it will be shown as a 1.
+		dato ^= datos_salida[i];
+
+		for(int j = 0; j < 4; j++) {
+			// Check if the S3, S4, S5 or S7 is on.
+			unsigned char current_status = dato & (1 << status_number[j]);
+			// Move it the amount of times required to have the following mapping:
+			// S7 = b3, S5 = b2, S4 = b1, S3 = b0 
+			current_status = current_status >> (shift_status_amount[j]);
+
+			final_status |= current_status;
+		}
+
+	}
+   Irp->IoStatus.Status = STATUS_SUCCESS;
+   Irp->IoStatus.Information = 1;
+   *pDato = final_status;
+   return STATUS_SUCCESS;
+}
+
 NTSTATUS DispatchRead(PDEVICE_OBJECT fdo, PIRP Irp)
 	{							// DispatchRead
 	PAGED_CODE();
@@ -128,6 +198,33 @@ NTSTATUS DispatchRead(PDEVICE_OBJECT fdo, PIRP Irp)
 	*pDato = dato;
 	return STATUS_SUCCESS;
 }							// DispatchRead
+
+NTSTATUS  DispatchWriteP(PDEVICE_OBJECT fdo, PIRP Irp) {
+  PUCHAR pDato = (PUCHAR)Irp->AssociatedIrp.SystemBuffer;
+  unsigned char dato;
+  unsigned char control;
+  unsigned char digitos[]={0x3f,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x67,...,0x71};
+  unsigned char i;
+  PIO_STACK_LOCATION stack = IoGetNextIrpStackLocation(Irp);
+  unsigned int contador = stack->Parameters.Read.Length;
+  LARGE_INTEGER largeInteger; 
+  control=READ_PORT_UCHAR((unsigned char *)0x37A);
+  for (i=0;i<contador;i++) {
+    dato=(UCHAR)*(pDato+i);
+    control&=0xFE; //C0<--0
+    WRITE_PORT_UCHAR((PUCHAR)0x37A, control);			//TODO
+    WRITE_PORT_UCHAR((PUCHAR)0x378, digitos[dato%16]);
+    control|=0x01; //C0<--1
+    control&=0xFD; //C1<--0
+    WRITE_PORT_UCHAR((PUCHAR)0x37A, control);			//TODO
+    WRITE_PORT_UCHAR((PUCHAR)0x378, digitos[dato/16]);
+    control|=0x02; //C1<--1
+	KeDelayExecutionThread(KernelMode,FALSE,1000000);
+  }
+  Irp->IoStatus.Status = STATUS_SUCCESS;
+  Irp->IoStatus.Information = contador;
+  return STATUS_SUCCESS;
+}
 
 NTSTATUS DispatchWrite(PDEVICE_OBJECT fdo, PIRP Irp)
 	{							// DispatchWrite
