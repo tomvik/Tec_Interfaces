@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<project>                                  
+  <executable name="dist/pic32mz_ef_sk_int_dyn/debug/hid_keyboard.X.debug.elf">                 
+    <memory name="program">                 
+      <units>bytes</units>                 
+      <length>2098304</length>                 
+      <used>35184</used>                     
+      <free>2063120</free>                     
+    </memory>                              
+    <memory name="data">              
+      <units>bytes</units>                 
+      <length>525184</length>                 
+      <used>3156</used>                     
+      <free>522028</free>                     
+    </memory>                              
+  </executable>                            
+</project>                                 
