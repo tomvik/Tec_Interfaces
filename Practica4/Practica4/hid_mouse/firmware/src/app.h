@@ -125,8 +125,18 @@ typedef struct
     /* Switch state variables*/
     bool ignoreSwitchPress;
 
+    // [CHANGE BEGINS] Two more boolean variables to for the switches.
+    bool ignoreSwitch2Press;
+    bool ignoreSwitch3Press;
+    // [CHANGE ENDS]
+
     /* Tracks switch press*/
     bool isSwitchPressed;
+
+    // [CHANGE BEGINS] Two more boolean variables to for the switches.
+    bool isSwitch2Pressed;
+    bool isSwitch3Pressed;
+    // [CHANGE ENDS]
 
     /* Mouse x coordinate*/
     MOUSE_COORDINATE xCoordinate;

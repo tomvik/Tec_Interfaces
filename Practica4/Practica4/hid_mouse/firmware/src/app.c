@@ -303,6 +303,92 @@ void APP_ProcessSwitchPress(void)
     }
 }
 
+// [CHANGE BEGINS]
+// TODO: Maybe better with an array instead of 3 functions.
+void APP_ProcessSwitch2Press(void)
+{
+    /* This function checks if the switch is pressed and then
+     * debounces the switch press*/
+    if(BSP_SWITCH_STATE_PRESSED == (BSP_SwitchStateGet(APP_USB_SWITCH_1)))
+    {
+        if(appData.ignoreSwitch2Press)
+        {
+            /* This means the key press is in progress */
+            if(appData.sofEventHasOccurred)
+            {
+                /* A timer event has occurred. Update the debounce timer */
+                appData.switchDebounceTimer ++;
+                appData.sofEventHasOccurred = false;
+                if(appData.switchDebounceTimer == APP_USB_SWITCH_DEBOUNCE_COUNT)
+                {
+                    /* Indicate that we have valid switch press. The switch is
+                     * pressed flag will be cleared by the application tasks
+                     * routine. We should be ready for the next key press.*/
+                    appData.isSwitch2Pressed = true;
+                    appData.switchDebounceTimer = 0;
+                    appData.ignoreSwitch2Press = false;
+                }
+            }
+        }
+        else
+        {
+            /* We have a fresh key press */
+            appData.ignoreSwitch2Press = true;
+            appData.switchDebounceTimer = 0;
+        }
+    }
+    else
+    {
+        /* No key press. Reset all the indicators. */
+        appData.ignoreSwitch2Press = false;
+        appData.switchDebounceTimer = 0;
+        appData.sofEventHasOccurred = false;
+    }
+}
+
+void APP_ProcessSwitch3Press(void)
+{
+    /* This function checks if the switch is pressed and then
+     * debounces the switch press*/
+    if(BSP_SWITCH_STATE_PRESSED == (BSP_SwitchStateGet(APP_USB_SWITCH_1)))
+    {
+        if(appData.ignoreSwitch3Press)
+        {
+            /* This means the key press is in progress */
+            if(appData.sofEventHasOccurred)
+            {
+                /* A timer event has occurred. Update the debounce timer */
+                appData.switchDebounceTimer ++;
+                appData.sofEventHasOccurred = false;
+                if(appData.switchDebounceTimer == APP_USB_SWITCH_DEBOUNCE_COUNT)
+                {
+                    /* Indicate that we have valid switch press. The switch is
+                     * pressed flag will be cleared by the application tasks
+                     * routine. We should be ready for the next key press.*/
+                    appData.isSwitch3Pressed = true;
+                    appData.switchDebounceTimer = 0;
+                    appData.ignoreSwitch3Press = false;
+                }
+            }
+        }
+        else
+        {
+            /* We have a fresh key press */
+            appData.ignoreSwitch3Press = true;
+            appData.switchDebounceTimer = 0;
+        }
+    }
+    else
+    {
+        /* No key press. Reset all the indicators. */
+        appData.ignoreSwitch3Press = false;
+        appData.switchDebounceTimer = 0;
+        appData.sofEventHasOccurred = false;
+    }
+}
+
+// [CHANGE ENDS]
+
 
 // *****************************************************************************
 // *****************************************************************************
@@ -390,6 +476,9 @@ void APP_Tasks ( void )
         case APP_STATE_MOUSE_EMULATE:
 
             APP_ProcessSwitchPress();
+            // [CHANGE BEGINS]
+            APP_ProcessSwitch2Press();
+            APP_ProcessSwitch3Press();
 
             /* The following logic rotates the mouse icon when
              * a switch is pressed */
@@ -401,97 +490,106 @@ void APP_Tasks ( void )
                 appData.isSwitchPressed = false;
             }
 
+            sent_dont_move = false;
+            appData.mouseButton[0] = MOUSE_BUTTON_STATE_RELEASED;
+            appData.mouseButton[1] = MOUSE_BUTTON_STATE_RELEASED;
+            appData.xCoordinate = (int8_t)0;
+            appData.yCoordinate = (int8_t)0;
+
             if(appData.emulateMouse)
             {
-                sent_dont_move = false;
-
-                if(movement_length > 50)
+                if(appData.isSwitch2Pressed)
                 {
-                    appData.mouseButton[0] = MOUSE_BUTTON_STATE_RELEASED;
-                    appData.mouseButton[1] = MOUSE_BUTTON_STATE_RELEASED;
-                    appData.xCoordinate =(int8_t)dir_table[vector & 0x07] ;
-                    appData.yCoordinate =(int8_t)dir_table[(vector+2) & 0x07];
-                    vector ++;
-                    movement_length = 0;
+                    appData.mouseButton[0] = MOUSE_BUTTON_STATE_PRESSED;
+                    appData.isSwitch2Pressed = false;
+                }
+                else if(appData.isSwitch3Pressed)
+                {
+                    appData.mouseButton[1] = MOUSE_BUTTON_STATE_PRESSED;
+                    appData.isSwitch3Pressed = false;
                 }
             }
             else
-            { 
-                appData.mouseButton[0] = MOUSE_BUTTON_STATE_RELEASED;
-                appData.mouseButton[1] = MOUSE_BUTTON_STATE_RELEASED;
-                appData.xCoordinate = 0;
-                appData.yCoordinate = 0;
+            {
+                if(appData.isSwitch2Pressed)
+                {
+                    appData.xCoordinate =(int8_t) 5;
+                    appData.isSwitch2Pressed = false;
+                }
+                else if(appData.isSwitch3Pressed)
+                {
+                    appData.xCoordinate =(int8_t) -5;
+                    appData.isSwitch3Pressed = false;
+                }
             }
 
             if(!appData.isMouseReportSendBusy)
             {
-                if(((sent_dont_move == false) && (!appData.emulateMouse)) || (appData.emulateMouse))
+
+                // [CHANGE ENDS]
+                /* This means we can send the mouse report. The
+                    isMouseReportBusy flag is updated in the HID Event Handler. */
+
+                appData.isMouseReportSendBusy = true;
+
+                /* Create the mouse report */
+
+                MOUSE_ReportCreate(appData.xCoordinate, appData.yCoordinate,
+                        appData.mouseButton, &mouseReport);
+
+                if(memcmp((const void *)&mouseReportPrevious, (const void *)&mouseReport,
+                        (size_t)sizeof(mouseReport)) == 0)
                 {
-
-                    /* This means we can send the mouse report. The
-                       isMouseReportBusy flag is updated in the HID Event Handler. */
-
-                    appData.isMouseReportSendBusy = true;
-
-                    /* Create the mouse report */
-
-                    MOUSE_ReportCreate(appData.xCoordinate, appData.yCoordinate,
-                            appData.mouseButton, &mouseReport);
-
-                    if(memcmp((const void *)&mouseReportPrevious, (const void *)&mouseReport,
-                            (size_t)sizeof(mouseReport)) == 0)
+                    /* Reports are same as previous report. However mouse reports
+                        * can be same as previous report as the co-ordinate positions are relative.
+                        * In that case it needs to be send */
+                    if((appData.xCoordinate == 0) && (appData.yCoordinate == 0))
                     {
-                        /* Reports are same as previous report. However mouse reports
-                         * can be same as previous report as the co-ordinate positions are relative.
-                         * In that case it needs to be send */
-                        if((appData.xCoordinate == 0) && (appData.yCoordinate == 0))
+                        /* If the coordinate positions are 0, that means there
+                            * is no relative change */
+                        if(appData.idleRate == 0)
                         {
-                            /* If the coordinate positions are 0, that means there
-                             * is no relative change */
-                            if(appData.idleRate == 0)
+                            appData.isMouseReportSendBusy = false;
+                        }
+                        else
+                        {
+                            /* Check the idle rate here. If idle rate time elapsed
+                                * then the data will be sent. Idle rate resolution is
+                                * 4 msec as per HID specification; possible range is
+                                * between 4msec >= idlerate <= 1020 msec.
+                                */
+                            if(appData.setIdleTimer * APP_USB_CONVERT_TO_MILLISECOND
+                                    >= appData.idleRate * 4)
                             {
-                                appData.isMouseReportSendBusy = false;
+                                /* Send REPORT as idle time has elapsed */
+                                appData.isMouseReportSendBusy = true;
                             }
                             else
                             {
-                                /* Check the idle rate here. If idle rate time elapsed
-                                 * then the data will be sent. Idle rate resolution is
-                                 * 4 msec as per HID specification; possible range is
-                                 * between 4msec >= idlerate <= 1020 msec.
-                                 */
-                                if(appData.setIdleTimer * APP_USB_CONVERT_TO_MILLISECOND
-                                        >= appData.idleRate * 4)
-                                {
-                                    /* Send REPORT as idle time has elapsed */
-                                    appData.isMouseReportSendBusy = true;
-                                }
-                                else
-                                {
-                                    /* Do not send REPORT as idle time has not elapsed */
-                                    appData.isMouseReportSendBusy = false;
-                                }
+                                /* Do not send REPORT as idle time has not elapsed */
+                                appData.isMouseReportSendBusy = false;
                             }
                         }
+                    }
 
-                    }
-                    if(appData.isMouseReportSendBusy == true)
-                    {
-                        /* Copy the report sent to previous */
-                        memcpy((void *)&mouseReportPrevious, (const void *)&mouseReport,
-                                (size_t)sizeof(mouseReport));
-                        
-                        /* Send the mouse report. */
-                        USB_DEVICE_HID_ReportSend(appData.hidInstance,
-                            &appData.reportTransferHandle, (uint8_t*)&mouseReport,
-                            sizeof(MOUSE_REPORT));
-                        appData.setIdleTimer = 0;
-                    }
-                    movement_length ++;
-                    sent_dont_move = true;
                 }
+                if(appData.isMouseReportSendBusy == true)
+                {
+                    /* Copy the report sent to previous */
+                    memcpy((void *)&mouseReportPrevious, (const void *)&mouseReport,
+                            (size_t)sizeof(mouseReport));
+                    
+                    /* Send the mouse report. */
+                    USB_DEVICE_HID_ReportSend(appData.hidInstance,
+                        &appData.reportTransferHandle, (uint8_t*)&mouseReport,
+                        sizeof(MOUSE_REPORT));
+                    appData.setIdleTimer = 0;
+                }
+                movement_length ++;
+                sent_dont_move = true;
             }
 
-            break;
+           break;
 
         case APP_STATE_ERROR:
 
