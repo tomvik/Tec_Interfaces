@@ -140,8 +140,20 @@ typedef struct
     /* Switch state*/
     bool ignoreSwitchPress;
 
+    // [CHANGE BEGINS]
+    bool ignoreSwitch2Press;
+    bool ignoreSwitch3Press;
+    // [CHANGE ENDS]
+
     /* Tracks switch press*/
     bool isSwitchPressed;
+
+    // [CHANGE BEGINS]
+    bool isSwitch2Pressed;
+    bool isSwitch3Pressed;
+
+    bool function;
+    // [CHANGE ENDS]
     
     /* Track the send report status */
     bool isReportSentComplete;

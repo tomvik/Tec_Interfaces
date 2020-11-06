@@ -312,6 +312,92 @@ void APP_ProcessSwitchPress(void)
     }
 }
 
+void APP_ProcessSwitch2Press(void)
+{
+    /* This function checks if the switch is pressed and then
+     * debounces the switch press*/
+
+/* Check if a key was pressed */
+    if(BSP_SWITCH_STATE_PRESSED == (BSP_SwitchStateGet(APP_USB_SWITCH_1)))
+    {
+        if(appData.ignoreSwitch2Press)
+        {
+            /* This measn the key press is in progress */
+            if(appData.sofEventHasOccurred)
+            {
+                /* A timer event has occurred. Update the debounce timer */
+                appData.switchDebounceTimer ++;
+                appData.sofEventHasOccurred = false;
+                if(appData.switchDebounceTimer == APP_USB_SWITCH_DEBOUNCE_COUNT)
+                {
+                    /* Indicate that we have valid switch press. The switch is
+                     * pressed flag will be cleared by the application tasks
+                     * routine. We should be ready for the next key press.*/
+                    appData.isSwitch2Pressed = true;
+                    appData.switchDebounceTimer = 0;
+                    appData.ignoreSwitch2Press = false;
+                }
+            }
+        }
+        else
+        {
+            /* We have a fresh key press */
+            appData.ignoreSwitch2Press = true;
+            appData.switchDebounceTimer = 0;
+        }
+    }
+    else
+    {
+        /* No key press. Reset all the indicators. */
+        appData.ignoreSwitch2Press = false;
+        appData.switchDebounceTimer = 0;
+        appData.sofEventHasOccurred = false;
+    }
+}
+
+void APP_ProcessSwitch3Press(void)
+{
+    /* This function checks if the switch is pressed and then
+     * debounces the switch press*/
+
+/* Check if a key was pressed */
+    if(BSP_SWITCH_STATE_PRESSED == (BSP_SwitchStateGet(APP_USB_SWITCH_1)))
+    {
+        if(appData.ignoreSwitch3Press)
+        {
+            /* This measn the key press is in progress */
+            if(appData.sofEventHasOccurred)
+            {
+                /* A timer event has occurred. Update the debounce timer */
+                appData.switchDebounceTimer ++;
+                appData.sofEventHasOccurred = false;
+                if(appData.switchDebounceTimer == APP_USB_SWITCH_DEBOUNCE_COUNT)
+                {
+                    /* Indicate that we have valid switch press. The switch is
+                     * pressed flag will be cleared by the application tasks
+                     * routine. We should be ready for the next key press.*/
+                    appData.isSwitch3Pressed = true;
+                    appData.switchDebounceTimer = 0;
+                    appData.ignoreSwitch3Press = false;
+                }
+            }
+        }
+        else
+        {
+            /* We have a fresh key press */
+            appData.ignoreSwitch3Press = true;
+            appData.switchDebounceTimer = 0;
+        }
+    }
+    else
+    {
+        /* No key press. Reset all the indicators. */
+        appData.ignoreSwitch3Press = false;
+        appData.switchDebounceTimer = 0;
+        appData.sofEventHasOccurred = false;
+    }
+}
+
 /********************************************************
  * Application Keyboard LED update routine.
  ********************************************************/
@@ -353,27 +439,36 @@ void APP_EmulateKeyboard(void)
         /* Clear the switch pressed flag */
         appData.isSwitchPressed = false;
 
-        /* If the switch was pressed, update the key counter and then
-         * add the key to the keycode array. */
-        appData.key ++;
-
-        if(appData.key == USB_HID_KEYBOARD_KEYPAD_KEYBOARD_RETURN_ENTER)
+        // [CHANGE BEGINS]
+        appData.function ^= 1;
+    }
+    appData.keyCodeArray.keyCode[0] = USB_HID_KEYBOARD_KEYPAD_RESERVED_NO_EVENT_INDICATED;
+    if (appData.function) {
+        if(appData.isSwitch2Pressed)
         {
-            appData.key = USB_HID_KEYBOARD_KEYPAD_KEYBOARD_A;
+            appData.keyCodeArray.keyCode[0] = USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAGE_UP;
+            appData.isSwitch2Pressed = false;
         }
-
-        appData.keyCodeArray.keyCode[0] = appData.key;
-
-        /* Start a switch press ignore counter */
+        else if(appData.isSwitch3Pressed)
+        {
+            appData.keyCodeArray.keyCode[0] = USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAGE_DOWN;;
+            appData.isSwitch3Pressed = false;
+        }
     }
     else
     {
-        /* Indicate no event */
-
-         appData.keyCodeArray.keyCode[0] =
-                 USB_HID_KEYBOARD_KEYPAD_RESERVED_NO_EVENT_INDICATED;
+        if(appData.isSwitch2Pressed)
+        {
+            appData.keyCodeArray.keyCode[0] = USB_HID_KEYBOARD_KEYPAD_KEYBOARD_TAB;
+            appData.isSwitch2Pressed = false;
+        }
+        else if(appData.isSwitch3Pressed)
+        {
+            appData.keyCodeArray.keyCode[0] = USB_HID_KEYBOARD_KEYPAD_KEYBOARD_RETURN_ENTER;
+            appData.isSwitch3Pressed = false;
+        }
     }
-
+    // [CHANGE ENDS]
     KEYBOARD_InputReportCreate(&appData.keyCodeArray,
             &appData.keyboardModifierKeys, &keyboardInputReport);
 
@@ -534,6 +629,10 @@ void APP_Tasks ( void )
              * next state. */
             
             APP_ProcessSwitchPress();
+            // [CHANGE BEGINS]
+            APP_ProcessSwitch2Press();
+            APP_ProcessSwitch3Press();
+            // [CHANGE ENDS]
             appData.state = APP_STATE_CHECK_FOR_OUTPUT_REPORT;
             break;
 
