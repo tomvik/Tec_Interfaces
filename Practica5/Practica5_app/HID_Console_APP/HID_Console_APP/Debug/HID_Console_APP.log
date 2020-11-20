@@ -1,0 +1,4 @@
+﻿  HID_Console_APP.c
+D:\lugol\Documents\TEC\Tareas_Fall2020\Interfaces\Lab\Practica5\Practica5_app\HID_Console_APP\HID_Console_APP\HID_Console_APP.c(132,12): warning C4566: character represented by universal-character-name '\uFFFD' cannot be represented in the current code page (1252)
+D:\lugol\Documents\TEC\Tareas_Fall2020\Interfaces\Lab\Practica5\Practica5_app\HID_Console_APP\HID_Console_APP\HID_Console_APP.c(158,12): warning C4566: character represented by universal-character-name '\uFFFD' cannot be represented in the current code page (1252)
+  HID_Console_APP.vcxproj -> D:\lugol\Documents\TEC\Tareas_Fall2020\Interfaces\Lab\Practica5\Practica5_app\HID_Console_APP\Debug\HID_Console_APP.exe
