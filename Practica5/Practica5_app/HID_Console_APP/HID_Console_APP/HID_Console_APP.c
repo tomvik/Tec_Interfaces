@@ -10,8 +10,6 @@
 
 #define INPUT_REPORT_SIZE 64
 #define OUTPUT_REPORT_SIZE 64
-
-#define TOTAL_SWITCHES 3
 //----------------------------------------------
 
 typedef struct _HIDD_ATTRIBUTES {
@@ -42,13 +40,16 @@ unsigned int HIDDeviceFound = FALSE;
 
 unsigned int terminaAbruptaEInstantaneamenteElPrograma = 0;
 
-#define kMatrixSize 2
-#define kExitCommand 4
+#define kMatrixMaxSize 10
+#define kExitCommand 5
+#define kModifyMatrixCommand 4
 
-static float matrix_a[kMatrixSize][kMatrixSize];
-static float matrix_b[kMatrixSize][kMatrixSize];
-static float matrix_c[kMatrixSize][kMatrixSize];
+static float matrix_a[kMatrixMaxSize][kMatrixMaxSize];
+static float matrix_b[kMatrixMaxSize][kMatrixMaxSize];
+static float matrix_c[kMatrixMaxSize][kMatrixMaxSize];
+static int kRealSize = 10;
 static float* p_temp = NULL;
+static unsigned char operation;
 
 void Load_HID_Library(void) {
     hHID = LoadLibrary("HID.DLL");
@@ -189,36 +190,42 @@ void Get_Desired_Ids(PUSHORT desired_vendor_id, PUSHORT desired_product_id) {
 }
 
 void Fill_Matrices() {
+    printf("What will be the size of the matrices? NxN\n");
+    printf("It has to be between 1 and 10, inclusive. Otherwise it will be set to 2x2\n");
+    scanf_s("%d", &kRealSize);
+
+    if (kRealSize < 1 || kRealSize > 10) kRealSize = 2;
+
     printf("Now you'll input the matrix data of the two matrices.\n");
     printf(
         "It will start on the upper left corner, finishing the first row, and then continuing with "
         "the next ones.\n");
 
-    for (int row = 0; row < kMatrixSize; ++row) {
-        for (int col = 0; col < kMatrixSize; ++col) {
+    for (int row = 0; row < kRealSize; ++row) {
+        for (int col = 0; col < kRealSize; ++col) {
             printf("Matrix A, row %d and column %d: ", row + 1, col + 1);
             scanf_s("%f", &matrix_a[row][col]);
         }
     }
 
-    for (int row = 0; row < kMatrixSize; ++row) {
-        for (int col = 0; col < kMatrixSize; ++col) {
+    for (int row = 0; row < kRealSize; ++row) {
+        for (int col = 0; col < kRealSize; ++col) {
             printf("Matrix B, row %d and column %d: ", row + 1, col + 1);
             scanf_s("%f", &matrix_b[row][col]);
         }
     }
 
     printf("The Matrix A looks like:\n");
-    for (int row = 0; row < kMatrixSize; ++row) {
-        for (int col = 0; col < kMatrixSize; ++col) {
+    for (int row = 0; row < kRealSize; ++row) {
+        for (int col = 0; col < kRealSize; ++col) {
             printf("%0.02f ", matrix_a[row][col]);
         }
         printf("\n");
     }
 
     printf("The Matrix B looks like:\n");
-    for (int row = 0; row < kMatrixSize; ++row) {
-        for (int col = 0; col < kMatrixSize; ++col) {
+    for (int row = 0; row < kRealSize; ++row) {
+        for (int col = 0; col < kRealSize; ++col) {
             printf("%0.02f ", matrix_b[row][col]);
         }
         printf("\n");
@@ -230,7 +237,8 @@ void Get_Execution_Case(PUSHORT execution_case) {
     printf("1. Multiply them (A * B)\n");
     printf("2. Add them (A + B)\n");
     printf("3. Substract them (A - B)\n");
-    printf("4. Quit the program\n");
+    printf("4. Modify the matrices\n");
+    printf("5. Quit the program\n");
     printf("Please enter a single digit representing the option you wish to perform\n");
 
     printf("\tDesired option: ");
@@ -263,123 +271,87 @@ int Touch_Device(const USHORT execution_case) {
     if (DeviceHandle == NULL)  // Validar que haya comunicacion con el dispositivo
         return 0;
 
-    switch (execution_case) {
-        case 1:
-            reporteSalida[0] = 0x00;
-            reporteSalida[1] = 0x83;
-            reporteSalida[2] = kMatrixSize;
-            reporteSalida[3] = kMatrixSize;
+    reporteSalida[0] = 0x00;
+    reporteSalida[1] = 0x83;
+    reporteSalida[2] = kRealSize;
+    reporteSalida[3] = kRealSize;
 
-            status =
-                WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
-            if (!status) {
-                printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-                return status;
-            }
-            printf("Sent the dimensions of the matrices\n");
+    status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
+    if (!status) {
+        printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+        return status;
+    }
+    printf("Sent the dimensions of the matrices\n");
 
-            const int last_index = 2;
-            const int size_float = 4;
+    const int last_index = 2;
+    const int size_float = 4;
 
-            for (int row = 0; row < kMatrixSize; ++row) {
-                reporteSalida[0] = 0x00;
-                reporteSalida[1] = 0x84;
-                for (int col = 0; col < kMatrixSize; ++col) {
-                    p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
-                    *p_temp = matrix_a[row][col];
-                }
-                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
-                                   &BytesWritten, NULL);
-                if (!status) {
-                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-                    return status;
-                }
-                printf("The row %d of Matrix A was sent.\n", row + 1);
-            }
+    for (int row = 0; row < kRealSize; ++row) {
+        reporteSalida[0] = 0x00;
+        reporteSalida[1] = 0x84;
+        for (int col = 0; col < kRealSize; ++col) {
+            p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
+            *p_temp = matrix_a[row][col];
+        }
+        status =
+            WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
+        if (!status) {
+            printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+            return status;
+        }
+        printf("The row %d of Matrix A was sent.\n", row + 1);
+    }
 
-            for (int row = 0; row < kMatrixSize; ++row) {
-                reporteSalida[0] = 0x00;
-                reporteSalida[1] = 0x84;
-                for (int col = 0; col < kMatrixSize; ++col) {
-                    p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
-                    *p_temp = matrix_b[row][col];
-                }
-                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
-                                   &BytesWritten, NULL);
-                if (!status) {
-                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-                    return status;
-                }
-                printf("The row %d of Matrix B was sent.\n", row + 1);
-            }
+    for (int row = 0; row < kRealSize; ++row) {
+        reporteSalida[0] = 0x00;
+        reporteSalida[1] = 0x84;
+        for (int col = 0; col < kRealSize; ++col) {
+            p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
+            *p_temp = matrix_b[row][col];
+        }
+        status =
+            WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
+        if (!status) {
+            printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+            return status;
+        }
+        printf("The row %d of Matrix B was sent.\n", row + 1);
+    }
 
-            for (int row = 0; row < kMatrixSize; ++row) {
-                reporteSalida[0] = 0x00;
-                reporteSalida[1] = 0x85;
+    operation = 0x84 + (unsigned char)execution_case;
 
-                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
-                                   &BytesWritten, NULL);
-                if (!status) {
-                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-                    return status;
-                }
-                printf("Sent petition for result\n");
+    for (int row = 0; row < kRealSize; ++row) {
+        reporteSalida[0] = 0x00;
+        reporteSalida[1] = operation;
 
-                memset(&reporteEntrada, 0, INPUT_REPORT_SIZE + 1);
-                status =
-                    ReadFile(DeviceHandle, reporteEntrada, INPUT_REPORT_SIZE + 1, &BytesRead, NULL);
-                if (!status) {
-                    printf("Error en el ReadFile: %d\n", GetLastError());
-                    return status;
-                }
+        status =
+            WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
+        if (!status) {
+            printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+            return status;
+        }
+        printf("Sent petition for result\n");
 
-                for (int col = 0; col < kMatrixSize; ++col) {
-                    p_temp = (float*)&reporteEntrada[last_index + (col * size_float)];
-                    printf("%x %x %f\n", reporteEntrada[0], reporteEntrada[1], *p_temp);
-                    matrix_c[row][col] = *p_temp;
-                }
-                printf("The row %d of Matrix C was received.\n", row + 1);
-            }
+        memset(&reporteEntrada, 0, INPUT_REPORT_SIZE + 1);
+        status = ReadFile(DeviceHandle, reporteEntrada, INPUT_REPORT_SIZE + 1, &BytesRead, NULL);
+        if (!status) {
+            printf("Error en el ReadFile: %d\n", GetLastError());
+            return status;
+        }
 
-            printf("The Matrix C looks like:\n");
-            for (int row = 0; row < kMatrixSize; ++row) {
-                for (int col = 0; col < kMatrixSize; ++col) {
-                    printf("%0.02f ", matrix_c[row][col]);
-                }
-                printf("\n");
-            }
-            break;
-        case 2:
-            reporteSalida[0] = 0x00;
-            reporteSalida[1] = 0x81;
-            reporteSalida[2] = 0;
+        for (int col = 0; col < kRealSize; ++col) {
+            p_temp = (float*)&reporteEntrada[last_index + (col * size_float)];
+            matrix_c[row][col] = *p_temp;
+        }
+        printf("The row %d of Matrix C was received.\n", row + 1);
+    }
 
-            status =
-                WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
-            if (!status) {
-                printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-            } else {
-                printf(
-                    "Se enviaron %d bytes al dispositivo preguntando por el estado de los "
-                    "switches\n",
-                    BytesWritten);
-                memset(&reporteEntrada, 0, INPUT_REPORT_SIZE + 1);
-                status =
-                    ReadFile(DeviceHandle, reporteEntrada, INPUT_REPORT_SIZE + 1, &BytesRead, NULL);
-                if (!status) {
-                    printf("Error en el ReadFile: %d\n", GetLastError());
-                } else {
-                    const unsigned char switches = (unsigned char)reporteEntrada[2];
-
-                    for (int current = 0; current < TOTAL_SWITCHES; ++current) {
-                        printf("\tSwitch %d: %x\n", current + 1,
-                               ((~switches) & (1 << current)) >> current);
-                    }
-                }
-            }
-            break;
-        default:
-            break;
+    printf("The Matrix C looks like:\n");
+    for (int row = 0; row < kRealSize; ++row) {
+        for (int col = 0; col < kRealSize; ++col) {
+            printf("%0.02f ", matrix_c[row][col]);
+        }
+        printf("\n");
     }
     printf("\n\n");
     return status;
@@ -397,8 +369,12 @@ void main() {
         Fill_Matrices();
         while ((!_kbhit()) && (!terminaAbruptaEInstantaneamenteElPrograma)) {
             Get_Execution_Case(&execution_case);
-            if (execution_case == kExitCommand) break;
-            Touch_Device(execution_case);
+            if (execution_case == kExitCommand)
+                break;
+            else if (execution_case == kModifyMatrixCommand)
+                Fill_Matrices();
+            else
+                Touch_Device(execution_case);
         }
     } else {
         printf(">:(\n");
