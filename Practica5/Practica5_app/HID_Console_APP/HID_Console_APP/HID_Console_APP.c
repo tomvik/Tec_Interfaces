@@ -42,6 +42,12 @@ unsigned int HIDDeviceFound = FALSE;
 
 unsigned int terminaAbruptaEInstantaneamenteElPrograma = 0;
 
+#define kMatrixSize 2
+#define kExitCommand 4
+
+static float matrix_a[kMatrixSize][kMatrixSize];
+static float matrix_b[kMatrixSize][kMatrixSize];
+
 void Load_HID_Library(void) {
     hHID = LoadLibrary("HID.DLL");
     if (!hHID) {
@@ -180,11 +186,48 @@ void Get_Desired_Ids(PUSHORT desired_vendor_id, PUSHORT desired_product_id) {
            *desired_vendor_id);
 }
 
+void Fill_Matrices() {
+    printf("Now you'll input the matrix data of the two matrices.\n");
+    printf(
+        "It will start on the upper left corner, finishing the first row, and then continuing with "
+        "the next ones.\n");
+
+    for (int row = 0; row < kMatrixSize; ++row) {
+        for (int col = 0; col < kMatrixSize; ++col) {
+            printf("Matrix A, row %d and column %d: ", row + 1, col + 1);
+            scanf_s("%f", &matrix_a[row][col]);
+        }
+    }
+
+    for (int row = 0; row < kMatrixSize; ++row) {
+        for (int col = 0; col < kMatrixSize; ++col) {
+            printf("Matrix B, row %d and column %d: ", row + 1, col + 1);
+            scanf_s("%f", &matrix_b[row][col]);
+        }
+    }
+
+    printf("The Matrix A looks like:\n");
+    for (int row = 0; row < kMatrixSize; ++row) {
+        for (int col = 0; col < kMatrixSize; ++col) {
+            printf("%0.02f ", matrix_a[row][col]);
+        }
+        printf("\n");
+    }
+
+    printf("The Matrix B looks like:\n");
+    for (int row = 0; row < kMatrixSize; ++row) {
+        for (int col = 0; col < kMatrixSize; ++col) {
+            printf("%0.02f ", matrix_b[row][col]);
+        }
+        printf("\n");
+    }
+}
+
 void Get_Execution_Case(PUSHORT execution_case) {
-    printf("What do you wish to do?\n");
-    printf("1. Modify a LED\n");
-    printf("2. Check the switches\n");
-    printf("3. Get the ID's of the developers\n");
+    printf("What do you wish to do with the matrices A and B?\n");
+    printf("1. Multiply them (A * B)\n");
+    printf("2. Add them (A + B)\n");
+    printf("3. Substract them (A - B)\n");
     printf("4. Quit the program\n");
     printf("Please enter a single digit representing the option you wish to perform\n");
 
@@ -214,11 +257,6 @@ int Touch_Device(const USHORT execution_case) {
     unsigned char reporteEntrada[INPUT_REPORT_SIZE + 1];
     unsigned char reporteSalida[OUTPUT_REPORT_SIZE + 1];
     int status = 0;
-    static unsigned char dato = 0x01;
-    static unsigned char numLED = 1;
-
-    static unsigned char num_led = 1;
-    static unsigned char led_state = 1;
 
     if (DeviceHandle == NULL)  // Validar que haya comunicacion con el dispositivo
         return 0;
@@ -308,12 +346,16 @@ void main() {
     static USHORT desired_vendor_id = 0;
     static USHORT desired_product_id = 0;
     static USHORT execution_case = 0;
+
+    Fill_Matrices();
+
     Get_Desired_Ids(&desired_vendor_id, &desired_product_id);
     if (Open_Device(desired_vendor_id, desired_product_id)) {
         printf("Vamos bien\n");
+        Fill_Matrices();
         while ((!_kbhit()) && (!terminaAbruptaEInstantaneamenteElPrograma)) {
             Get_Execution_Case(&execution_case);
-            if (execution_case == 4) break;
+            if (execution_case == kExitCommand) break;
             Touch_Device(execution_case);
         }
     } else {
