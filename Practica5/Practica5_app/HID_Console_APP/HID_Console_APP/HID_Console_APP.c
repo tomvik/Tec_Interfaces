@@ -47,6 +47,8 @@ unsigned int terminaAbruptaEInstantaneamenteElPrograma = 0;
 
 static float matrix_a[kMatrixSize][kMatrixSize];
 static float matrix_b[kMatrixSize][kMatrixSize];
+static float matrix_c[kMatrixSize][kMatrixSize];
+static float* p_temp = NULL;
 
 void Load_HID_Library(void) {
     hHID = LoadLibrary("HID.DLL");
@@ -263,19 +265,89 @@ int Touch_Device(const USHORT execution_case) {
 
     switch (execution_case) {
         case 1:
-            Get_Led_And_State(&num_led, &led_state);
-
             reporteSalida[0] = 0x00;
-            reporteSalida[1] = num_led;
-            reporteSalida[2] = led_state;
+            reporteSalida[1] = 0x83;
+            reporteSalida[2] = kMatrixSize;
+            reporteSalida[3] = kMatrixSize;
 
             status =
                 WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
-            if (!status)
+            if (!status) {
                 printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-            else
-                printf("Se enviaron %d bytes al dispositivo (numLED=%d, dato=%d)\n", BytesWritten,
-                       num_led, led_state);
+                return status;
+            }
+            printf("Sent the dimensions of the matrices\n");
+
+            const int last_index = 2;
+            const int size_float = 4;
+
+            for (int row = 0; row < kMatrixSize; ++row) {
+                reporteSalida[0] = 0x00;
+                reporteSalida[1] = 0x84;
+                for (int col = 0; col < kMatrixSize; ++col) {
+                    p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
+                    *p_temp = matrix_a[row][col];
+                }
+                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
+                                   &BytesWritten, NULL);
+                if (!status) {
+                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+                    return status;
+                }
+                printf("The row %d of Matrix A was sent.\n", row + 1);
+            }
+
+            for (int row = 0; row < kMatrixSize; ++row) {
+                reporteSalida[0] = 0x00;
+                reporteSalida[1] = 0x84;
+                for (int col = 0; col < kMatrixSize; ++col) {
+                    p_temp = (float*)&reporteSalida[last_index + (col * size_float)];
+                    *p_temp = matrix_b[row][col];
+                }
+                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
+                                   &BytesWritten, NULL);
+                if (!status) {
+                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+                    return status;
+                }
+                printf("The row %d of Matrix B was sent.\n", row + 1);
+            }
+
+            for (int row = 0; row < kMatrixSize; ++row) {
+                reporteSalida[0] = 0x00;
+                reporteSalida[1] = 0x85;
+
+                status = WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1,
+                                   &BytesWritten, NULL);
+                if (!status) {
+                    printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
+                    return status;
+                }
+                printf("Sent petition for result\n");
+
+                memset(&reporteEntrada, 0, INPUT_REPORT_SIZE + 1);
+                status =
+                    ReadFile(DeviceHandle, reporteEntrada, INPUT_REPORT_SIZE + 1, &BytesRead, NULL);
+                if (!status) {
+                    printf("Error en el ReadFile: %d\n", GetLastError());
+                    return status;
+                }
+
+                for (int col = 0; col < kMatrixSize; ++col) {
+                    p_temp = (float*)&reporteEntrada[last_index + (col * size_float)];
+                    printf("%x %x %f\n", reporteEntrada[0], reporteEntrada[1], *p_temp);
+                    matrix_c[row][col] = *p_temp;
+                }
+                printf("The row %d of Matrix C was received.\n", row + 1);
+            }
+
+            printf("The Matrix C looks like:\n");
+            for (int row = 0; row < kMatrixSize; ++row) {
+                for (int col = 0; col < kMatrixSize; ++col) {
+                    printf("%0.02f ", matrix_c[row][col]);
+                }
+                printf("\n");
+            }
             break;
         case 2:
             reporteSalida[0] = 0x00;
@@ -306,34 +378,6 @@ int Touch_Device(const USHORT execution_case) {
                 }
             }
             break;
-        case 3:
-            reporteSalida[0] = 0x00;
-            reporteSalida[1] = 0x82;
-            reporteSalida[2] = 0;
-
-            memset(&reporteEntrada, 0, INPUT_REPORT_SIZE + 1);
-            status =
-                WriteFile(DeviceHandle, reporteSalida, OUTPUT_REPORT_SIZE + 1, &BytesWritten, NULL);
-            if (!status) {
-                printf("Error en el WriteFile %d %d\n", GetLastError(), BytesWritten);
-            } else {
-                printf("Se enviaron %d bytes al dispositivo preguntando por las matriculas\n",
-                       BytesWritten);
-                status =
-                    ReadFile(DeviceHandle, reporteEntrada, INPUT_REPORT_SIZE + 1, &BytesRead, NULL);
-                if (!status) {
-                    printf("Error en el ReadFile: %d\n", GetLastError());
-                } else {
-                    if ((unsigned char)reporteEntrada[1] == (unsigned char)0x82) {
-                        printf("\tMatriculas: ");
-                        for (int letra = 0; letra < 19; ++letra) {
-                            printf("%c", (unsigned char)reporteEntrada[letra + 2]);
-                        }
-                        printf("\n");
-                    }
-                }
-            }
-            break;
         default:
             break;
     }
@@ -346,8 +390,6 @@ void main() {
     static USHORT desired_vendor_id = 0;
     static USHORT desired_product_id = 0;
     static USHORT execution_case = 0;
-
-    Fill_Matrices();
 
     Get_Desired_Ids(&desired_vendor_id, &desired_product_id);
     if (Open_Device(desired_vendor_id, desired_product_id)) {
